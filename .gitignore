@@ -1,11 +1,21 @@
-# Binaries
-bin/
+# --- Binaries & Artifacts ---
+/bin/
 caddy
 caddy.pid
 
-# Results
-results/
+# --- Benchmarks Results ---
+/results/
 *.csv
 
-# OS
+# --- Rust Build Artifacts (Heavy!) ---
+scenarios/rust/target/
+scenarios/rust/Cargo.lock
+
+# --- Go Artifacts ---
+vendor/
+go.sum
+
+# --- System/IDE ---
 .DS_Store
+.vscode/
+.idea/

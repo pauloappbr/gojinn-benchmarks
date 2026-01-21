@@ -1,4 +1,4 @@
-.PHONY: all clean prepare bench-docker bench-gojinn help
+.PHONY: all clean prepare bench-docker bench-gojinn bench-rust help
 
 # Configuration
 REQUESTS=5000
@@ -10,28 +10,32 @@ CADDY_BIN=./caddy
 help:
 	@echo "🧞 Gojinn Benchmarks Suite"
 	@echo "--------------------------------"
-	@echo "make all          - Run full suite (Docker vs Gojinn)"
-	@echo "make bench-docker - Run only Docker benchmark"
-	@echo "make bench-gojinn - Run only Gojinn benchmark"
-	@echo "make clean        - Remove artifacts"
+	@echo "make all          - Run full suite (Docker vs Gojinn TinyGo vs Rust)"
+	@echo "make bench-rust   - Run only Rust benchmark"
+	@echo "make cold-start   - Run Cold Start showdown"
 
-all: clean prepare bench-docker bench-gojinn
+all: clean prepare bench-docker bench-gojinn bench-rust
 
 prepare:
 	@mkdir -p $(OUT_DIR) $(RESULTS_DIR)
 	@echo "🛠️  Compiling Bench Runner..."
 	@go build -o $(OUT_DIR)/bench-runner cmd/bench-runner/main.go
 	
-	@echo "🐳 Building Docker Image (Scenarios)..."
+	@echo "🐳 Building Docker Image..."
 	@cd scenarios/docker && docker build -q -t benchmark-go .
 	
-	@echo "🤏 Compiling WASM with TinyGo (Dockerized)..."
+	@echo "🤏 Compiling Go WASM (TinyGo)..."
 	@docker run --rm -v $(PWD)/scenarios/wasm:/src -w /src tinygo/tinygo:0.33.0 \
 		tinygo build -o tax.wasm -target=wasi -no-debug -panic=trap main.go
 	@mv scenarios/wasm/tax.wasm $(OUT_DIR)/tax.wasm
 
+	@echo "🦀 Compiling Rust WASM..."
+	@docker run --rm -v $(PWD)/scenarios/rust:/src -w /src rust:1.84-slim-bookworm \
+		sh -c "rustup target add wasm32-wasip1 && cargo build --release --target wasm32-wasip1"
+	@mv scenarios/rust/target/wasm32-wasip1/release/tax-rust.wasm $(OUT_DIR)/rust.wasm
+
 bench-docker:
-	@echo "\n🥊 ROUND 1: DOCKER CONTAINER (Native Go)"
+	@echo "\n🥊 ROUND 1: DOCKER (Native Go)"
 	@echo "----------------------------------------"
 	@docker run --rm -d -p 8081:8081 --name bench-docker-inst benchmark-go > /dev/null
 	@sleep 2
@@ -41,21 +45,35 @@ bench-docker:
 	@docker stop bench-docker-inst > /dev/null
 
 bench-gojinn:
-	@if [ ! -f $(CADDY_BIN) ]; then echo "❌ Caddy binary not found in root!"; exit 1; fi
-	@echo "\n🥊 ROUND 2: GOJINN (In-Process Wasm)"
+	@if [ ! -f $(CADDY_BIN) ]; then echo "❌ Caddy binary not found!"; exit 1; fi
+	@echo "\n🥊 ROUND 2: GOJINN (TinyGo)"
 	@echo "----------------------------------------"
+	# Garante que está usando o wasm do Go
+	@sed -i 's|gojinn .* {|gojinn ./bin/tax.wasm {|' configs/Caddyfile
 	@$(CADDY_BIN) run --config configs/Caddyfile > /dev/null 2>&1 & echo $$! > caddy.pid
-	@# Wait for parallel pool provisioning
-	@sleep 5 
+	@sleep 5
 	@$(OUT_DIR)/bench-runner -url http://localhost:8080/api/bench \
-		-n $(REQUESTS) -c $(CONCURRENCY) -name Gojinn
-	@mv gojinn_results.csv $(RESULTS_DIR)/
+		-n $(REQUESTS) -c $(CONCURRENCY) -name Gojinn-TinyGo
+	@mv gojinn-tinygo_results.csv $(RESULTS_DIR)/
 	@kill $$(cat caddy.pid) && rm caddy.pid
 
-clean:
-	@rm -rf $(OUT_DIR)/* $(RESULTS_DIR)/* caddy.pid
-	@echo "🧹 Cleaned up."
+bench-rust:
+	@if [ ! -f $(CADDY_BIN) ]; then echo "❌ Caddy binary not found!"; exit 1; fi
+	@echo "\n🥊 ROUND 3: GOJINN (Rust)"
+	@echo "----------------------------------------"
+	# Troca dinamicamente o Caddyfile para usar o binário Rust
+	@sed -i 's|gojinn .* {|gojinn ./bin/rust.wasm {|' configs/Caddyfile
+	@$(CADDY_BIN) run --config configs/Caddyfile > /dev/null 2>&1 & echo $$! > caddy.pid
+	@sleep 5
+	@$(OUT_DIR)/bench-runner -url http://localhost:8080/api/bench \
+		-n $(REQUESTS) -c $(CONCURRENCY) -name Gojinn-Rust
+	@mv gojinn-rust_results.csv $(RESULTS_DIR)/
+	@kill $$(cat caddy.pid) && rm caddy.pid
 
 cold-start:
 	@chmod +x cold-start.sh
 	@./cold-start.sh
+
+clean:
+	@rm -rf $(OUT_DIR)/* $(RESULTS_DIR)/* caddy.pid scenarios/rust/target
+	@echo "🧹 Cleaned up."

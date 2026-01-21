@@ -6,7 +6,7 @@
 :8080 {
     handle /api/bench {
         # Aponta para a pasta de artefatos (bin)
-        gojinn ./bin/tax.wasm {
+        gojinn ./bin/rust.wasm {
             timeout 1s
             memory_limit 32MB
         }
