@@ -23,15 +23,31 @@ Tests performed on standard hardware (12 vCPU).
 ### 1. Throughput & Latency (Warm State)
 *Both services running and ready to accept traffic.*
 
+![Throughput Chart](assets/chart_throughput.png)
+![Latency Chart](assets/chart_latency.png)
+
 | Metric | Docker (Native) | Gojinn (TinyGo) | Gojinn (Rust) | Analysis |
 | :--- | :--- | :--- | :--- | :--- |
 | **Throughput** | ~14,500 req/s | ~5,300 req/s | **~6,200 req/s** | Rust extracts +20% performance over TinyGo. |
 | **Latency (Min)** | 0.13 ms | 1.17 ms | **0.44 ms** | **Rust breaks the sub-ms barrier.** |
 | **Latency (P99)** | ~12 ms | ~39 ms | **~30 ms** | Rust is more stable (No GC pauses). |
+
+---
+
+### 2. Artifact Size (Density)
+
+![Size Chart](assets/chart_size.png)
+
+| Metric | Docker (Native) | Gojinn (TinyGo) | Gojinn (Rust) | Analysis |
+| :--- | :--- | :--- | :--- | :--- |
 | **Artifact Size** | 20.6 MB | 288 KB | **180 KB** | **🏆 Gojinn is ~100x smaller.** |
 
-### 2. The "Cold Start" Showdown
+---
+
+### 3. The "Cold Start" Showdown
 *Starting the service from zero for each request loop.*
+
+![Cold Start Chart](assets/chart_coldstart.png)
 
 | Metric | Docker | Gojinn (Any Lang) | Improvement |
 | :--- | :--- | :--- | :--- |
@@ -78,7 +94,15 @@ This command compiles the Runner, builds the Docker image, compiles Wasm targets
 make all
 ```
 
-### 2. Run Individual Benchmarks
+### 2. Generate Charts
+
+Requires Docker. This will generate the visual reports in `assets/`.
+
+```bash
+make graphs
+```
+
+### 3. Run Individual Benchmarks
 
 ```bash
 make bench-docker   # Run Native Go
@@ -86,7 +110,7 @@ make bench-gojinn   # Run TinyGo Wasm
 make bench-rust     # Run Rust Wasm
 ```
 
-### 3. Run Cold Start Test
+### 4. Run Cold Start Test
 
 ```bash
 make cold-start
@@ -107,6 +131,7 @@ Follows standard Go layout:
 ├── bin/             # Compiled artifacts (Ignored)
 ├── results/         # Output CSV data (Ignored)
 ├── cold-start.sh    # Cold Start script
+├── assets/          # Generated charts
 ├── Makefile         # Automation scripts
 └── README.md        # This file
 ```

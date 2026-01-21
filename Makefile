@@ -1,4 +1,4 @@
-.PHONY: all clean prepare bench-docker bench-gojinn bench-rust help
+.PHONY: all clean prepare bench-docker bench-gojinn bench-rust graphs help
 
 # Configuration
 REQUESTS=5000
@@ -13,11 +13,12 @@ help:
 	@echo "make all          - Run full suite (Docker vs Gojinn TinyGo vs Rust)"
 	@echo "make bench-rust   - Run only Rust benchmark"
 	@echo "make cold-start   - Run Cold Start showdown"
+	@echo "make graphs       - Generate charts using Docker (Python)"
 
-all: clean prepare bench-docker bench-gojinn bench-rust
+all: clean prepare bench-docker bench-gojinn bench-rust graphs
 
 prepare:
-	@mkdir -p $(OUT_DIR) $(RESULTS_DIR)
+	@mkdir -p $(OUT_DIR) $(RESULTS_DIR) assets
 	@echo "🛠️  Compiling Bench Runner..."
 	@go build -o $(OUT_DIR)/bench-runner cmd/bench-runner/main.go
 	
@@ -48,10 +49,10 @@ bench-gojinn:
 	@if [ ! -f $(CADDY_BIN) ]; then echo "❌ Caddy binary not found!"; exit 1; fi
 	@echo "\n🥊 ROUND 2: GOJINN (TinyGo)"
 	@echo "----------------------------------------"
-	# Garante que está usando o wasm do Go
+	# Ensures config points to the Go WASM binary
 	@sed -i 's|gojinn .* {|gojinn ./bin/tax.wasm {|' configs/Caddyfile
 	@$(CADDY_BIN) run --config configs/Caddyfile > /dev/null 2>&1 & echo $$! > caddy.pid
-	@sleep 5
+	@sleep 5 # Waits for Worker Pool provisioning
 	@$(OUT_DIR)/bench-runner -url http://localhost:8080/api/bench \
 		-n $(REQUESTS) -c $(CONCURRENCY) -name Gojinn-TinyGo
 	@mv gojinn-tinygo_results.csv $(RESULTS_DIR)/
@@ -61,10 +62,10 @@ bench-rust:
 	@if [ ! -f $(CADDY_BIN) ]; then echo "❌ Caddy binary not found!"; exit 1; fi
 	@echo "\n🥊 ROUND 3: GOJINN (Rust)"
 	@echo "----------------------------------------"
-	# Troca dinamicamente o Caddyfile para usar o binário Rust
+	# Dynamically updates Caddyfile to use the Rust binary
 	@sed -i 's|gojinn .* {|gojinn ./bin/rust.wasm {|' configs/Caddyfile
 	@$(CADDY_BIN) run --config configs/Caddyfile > /dev/null 2>&1 & echo $$! > caddy.pid
-	@sleep 5
+	@sleep 5 # Waits for Worker Pool provisioning
 	@$(OUT_DIR)/bench-runner -url http://localhost:8080/api/bench \
 		-n $(REQUESTS) -c $(CONCURRENCY) -name Gojinn-Rust
 	@mv gojinn-rust_results.csv $(RESULTS_DIR)/
@@ -74,6 +75,11 @@ cold-start:
 	@chmod +x cold-start.sh
 	@./cold-start.sh
 
+graphs:
+	@echo "📊 Generating Benchmark Charts..."
+	@docker run --rm -v $(PWD):/app -w /app python:3.9-slim \
+		sh -c "pip install matplotlib && python scripts/generate_graphs.py"
+
 clean:
 	@rm -rf $(OUT_DIR)/* $(RESULTS_DIR)/* caddy.pid scenarios/rust/target
-	@echo "🧹 Cleaned up."
+	@echo "🧹 Workspace cleaned."

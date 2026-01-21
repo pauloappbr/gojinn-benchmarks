@@ -19,3 +19,7 @@ go.sum
 .DS_Store
 .vscode/
 .idea/
+
+# --- Python Virtual Env ---
+venv/
+__pycache__/
