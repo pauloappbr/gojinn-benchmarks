@@ -1,0 +1,14 @@
+{
+    order gojinn last
+    admin off
+}
+
+:8080 {
+    handle /api/bench {
+        # Aponta para a pasta de artefatos (bin)
+        gojinn ./bin/tax.wasm {
+            timeout 1s
+            memory_limit 32MB
+        }
+    }
+}

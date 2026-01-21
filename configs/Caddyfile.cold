@@ -1,0 +1,12 @@
+{
+    order gojinn last
+    admin off
+}
+
+:8080 {
+    handle /api/bench {
+        gojinn ./bin/tax.wasm {
+            pool_size 1
+        }
+    }
+}

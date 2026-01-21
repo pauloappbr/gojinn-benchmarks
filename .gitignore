@@ -1,0 +1,11 @@
+# Binaries
+bin/
+caddy
+caddy.pid
+
+# Results
+results/
+*.csv
+
+# OS
+.DS_Store
